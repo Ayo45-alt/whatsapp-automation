@@ -1,0 +1,18 @@
+# Python virtual environment
+venv/
+
+# WhatsApp profile session copy (CRITICAL: NEVER UPLOAD THIS TO GITHUB AS IT CONTAINS YOUR LOGIN SESSION)
+whatsapp_profile_copy/
+
+# Uploaded media files
+uploads/
+
+# Python cache
+__pycache__/
+
+# Log files and temporary screenshots
+*.log
+*.png
+
+# VS Code config
+.vscode/

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Broadcast Dashboard</title>
+    <!-- Outfit & Inter Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="app-icon"><i class="fa-brands fa-whatsapp"></i></div>
+                <div class="title-meta">
+                    <h1>WhatsApp Automation</h1>
+                    <p>Local Broadcast Dashboard</p>
+                </div>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot idle" id="statusDot"></span>
+                <span class="status-text" id="statusText">Idle</span>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Side: Message & File Input -->
+            <section class="card compose-card">
+                <h2 class="card-title"><i class="fa-regular fa-paper-plane"></i> 1. Compose Broadcast</h2>
+                
+                <div class="form-group">
+                    <label for="messageText">Daily Message</label>
+                    <textarea id="messageText" placeholder="Type your morning greeting or broadcast text here... Emojis are supported! 🥳😎🔥" rows="6"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Broadcast Image</label>
+                    <div class="upload-dropzone" id="dropzone">
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                        <i class="fa-regular fa-image upload-icon"></i>
+                        <p class="upload-text">Drag & drop your image here, or <span>browse</span></p>
+                        <p class="upload-hint">Supports PNG, JPG, JPEG</p>
+                        <div class="image-preview-container" id="previewContainer" style="display: none;">
+                            <img id="imagePreview" src="" alt="Broadcast Preview">
+                            <button class="btn btn-danger btn-sm remove-preview-btn" id="removePreviewBtn"><i class="fa-solid fa-times"></i> Remove</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: Group/Contact Management -->
+            <section class="card groups-card">
+                <h2 class="card-title"><i class="fa-solid fa-users"></i> 2. Target Groups & Contacts</h2>
+                
+                <!-- Add Group Form -->
+                <form class="add-group-form" id="addGroupForm">
+                    <input type="text" id="groupNameInput" placeholder="Enter group/contact name exactly..." required>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add</button>
+                </form>
+
+                <div class="groups-list-container">
+                    <div class="groups-header">
+                        <span>Contact Name</span>
+                        <div class="header-actions">
+                            <button class="btn-link" id="selectAllBtn">Select All</button>
+                            <span class="divider">|</span>
+                            <button class="btn-link" id="selectNoneBtn">Clear All</button>
+                        </div>
+                    </div>
+                    <ul class="groups-list" id="groupsList">
+                        <!-- Loaded dynamically -->
+                        <li class="loading-placeholder">Loading groups...</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Bottom: Live Logs and Execution -->
+            <section class="card console-card">
+                <div class="console-header">
+                    <h2 class="card-title"><i class="fa-solid fa-terminal"></i> 3. Live Broadcast Status & Logs</h2>
+                    <div class="console-actions">
+                        <button class="btn btn-success btn-lg" id="startBtn"><i class="fa-solid fa-play"></i> Start Broadcast</button>
+                    </div>
+                </div>
+                <div class="console-body" id="consoleLogs">
+                    <div class="log-line system-line">[System] Web server ready. Fill in the fields and click "Start Broadcast" above.</div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
