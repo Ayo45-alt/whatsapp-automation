@@ -69,10 +69,36 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         
         log_status("⏳ Waiting for WhatsApp Web to load...")
         search_box_xpath = "//input[@aria-label='Search or start a new chat']"
-        WebDriverWait(driver, 45).until(
-            EC.presence_of_element_located((By.XPATH, search_box_xpath))
-        )
-        log_status("✅ WhatsApp Web loaded successfully!")
+        use_here_xpath = "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'use here')]"
+        
+        success = False
+        start_time = time.time()
+        while time.time() - start_time < 120:  # 2 minutes timeout
+            # 1. Check if logged in successfully
+            search_elements = driver.find_elements(By.XPATH, search_box_xpath)
+            if len(search_elements) > 0:
+                log_status("✅ WhatsApp Web loaded successfully!")
+                success = True
+                break
+                
+            # 2. Check for "Use here" dialog
+            use_here_elements = driver.find_elements(By.XPATH, use_here_xpath)
+            if len(use_here_elements) > 0:
+                log_status("⚠️ Detected 'Use here' popup. Activating session in this window...")
+                try:
+                    use_here_elements[0].click()
+                except Exception:
+                    try:
+                        driver.execute_script("arguments[0].click();", use_here_elements[0])
+                    except Exception:
+                        pass
+                time.sleep(2)
+                continue
+                
+            time.sleep(2)
+            
+        if not success:
+            raise TimeoutError("Timed out waiting for WhatsApp Web. If you saw a QR code, 120 seconds was not enough to scan it. Please try again.")
         
         for idx, group_name in enumerate(groups_to_send):
             try:
