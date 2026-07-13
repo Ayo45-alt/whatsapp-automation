@@ -114,10 +114,22 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 active_el = driver.switch_to.active_element
                 active_el.clear()
                 active_el.send_keys(group_name)
-                time.sleep(2.5) # Wait for search results
+                time.sleep(3.0) # Wait for search results
                 
-                # Press ENTER
-                active_el.send_keys(Keys.ENTER)
+                # Check if search returned any contacts/groups in the side pane
+                list_items = driver.find_elements(By.XPATH, '//div[@id="pane-side"]//div[@role="listitem"]')
+                if len(list_items) == 0:
+                    log_status(f"⚠️ No matches found in search for: {group_name}")
+                    continue
+                    
+                # Click the first search result to open the chat
+                try:
+                    list_items[0].click()
+                except Exception:
+                    # Fallback to pressing ENTER
+                    active_el = driver.switch_to.active_element
+                    active_el.send_keys(Keys.ENTER)
+                
                 time.sleep(2)
                 
                 # Copy and paste image
