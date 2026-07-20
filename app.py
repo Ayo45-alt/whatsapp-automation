@@ -73,7 +73,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         
         success = False
         start_time = time.time()
-        while time.time() - start_time < 120:  # 2 minutes timeout
+        while time.time() - start_time < 300:  # 5 minutes timeout
             # 1. Check if logged in successfully
             search_elements = driver.find_elements(By.XPATH, search_box_xpath)
             if len(search_elements) > 0:
@@ -98,7 +98,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
             time.sleep(2)
             
         if not success:
-            raise TimeoutError("Timed out waiting for WhatsApp Web. If you saw a QR code, 120 seconds was not enough to scan it. Please try again.")
+            raise TimeoutError("Timed out waiting for WhatsApp Web. If you saw a QR code, 300 seconds was not enough to scan it. Please try again.")
         
         for idx, group_name in enumerate(groups_to_send):
             try:
