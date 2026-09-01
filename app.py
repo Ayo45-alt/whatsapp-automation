@@ -11,9 +11,18 @@ import pyperclip
 import io
 import time
 import os
+import sys
 import json
 import queue
 import threading
+
+# Force UTF-8 on Windows command line streams to avoid charmap encode errors with emojis
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
@@ -24,8 +33,14 @@ log_queue = queue.Queue()
 is_running = False
 
 def log_status(msg):
-    log_queue.put(msg)
-    print(msg)
+    log_queue.put(str(msg))
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(str(msg).encode('ascii', errors='replace').decode('ascii'))
+        except Exception:
+            pass
 
 # --- Copy image to clipboard function ---
 def copy_image_to_clipboard(path):
