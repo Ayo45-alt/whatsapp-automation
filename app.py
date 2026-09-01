@@ -68,99 +68,202 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         driver.get("https://web.whatsapp.com")
         
         log_status("⏳ Waiting for WhatsApp Web to load...")
-        search_box_xpath = "//input[@aria-label='Search or start a new chat']"
+        
+        search_box_selectors = [
+            "//input[@aria-label='Search or start a new chat']",
+            "//div[@data-testid='chat-list-search']//input",
+            "//div[@data-testid='chat-list-search']//div[@contenteditable='true']",
+            "//div[@id='side']//input",
+            "//div[@id='side']//div[@role='textbox']",
+            "//input[contains(translate(@aria-label, 'SEARCH', 'search'), 'search')]",
+            "//div[contains(translate(@aria-label, 'SEARCH', 'search'), 'search')]",
+            "//div[@contenteditable='true'][@data-tab='3']"
+        ]
+        
         use_here_xpath = "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'use here')]"
+        reconnect_xpath = "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'reconnect')]"
         
         success = False
         start_time = time.time()
         while time.time() - start_time < 300:  # 5 minutes timeout
-            # 1. Check if logged in successfully
-            search_elements = driver.find_elements(By.XPATH, search_box_xpath)
-            if len(search_elements) > 0:
-                log_status("✅ WhatsApp Web loaded successfully!")
-                success = True
-                break
-                
-            # 2. Check for "Use here" dialog
+            # Check for "Use here" dialog
             use_here_elements = driver.find_elements(By.XPATH, use_here_xpath)
             if len(use_here_elements) > 0:
                 log_status("⚠️ Detected 'Use here' popup. Activating session in this window...")
                 try:
-                    use_here_elements[0].click()
+                    driver.execute_script("arguments[0].click();", use_here_elements[0])
                 except Exception:
-                    try:
-                        driver.execute_script("arguments[0].click();", use_here_elements[0])
-                    except Exception:
-                        pass
-                time.sleep(2)
+                    pass
+                time.sleep(3)
                 continue
+                
+            # Check for Reconnect button
+            reconnect_elements = driver.find_elements(By.XPATH, reconnect_xpath)
+            if len(reconnect_elements) > 0:
+                log_status("⚠️ Detected network disconnect. Clicking Reconnect...")
+                try:
+                    driver.execute_script("arguments[0].click();", reconnect_elements[0])
+                except Exception:
+                    pass
+                time.sleep(3)
+                continue
+
+            # Check if search box or chat pane is loaded
+            found_search = False
+            for sel in search_box_selectors:
+                elements = driver.find_elements(By.XPATH, sel)
+                if len(elements) > 0:
+                    found_search = True
+                    break
+            
+            # Also check if sidebar chat pane exists
+            pane_side = driver.find_elements(By.ID, "pane-side")
+            if found_search or len(pane_side) > 0:
+                log_status("✅ WhatsApp Web loaded successfully!")
+                success = True
+                break
                 
             time.sleep(2)
             
         if not success:
             raise TimeoutError("Timed out waiting for WhatsApp Web. If you saw a QR code, 300 seconds was not enough to scan it. Please try again.")
         
+        # Helper to find search box element dynamically
+        def get_search_box():
+            for sel in search_box_selectors:
+                try:
+                    el = driver.find_element(By.XPATH, sel)
+                    if el.is_displayed():
+                        return el
+                except Exception:
+                    continue
+            return None
+
+        # Loop through target groups
         for idx, group_name in enumerate(groups_to_send):
             try:
                 log_status(f"💬 [{idx+1}/{len(groups_to_send)}] Processing: {group_name}")
                 
-                # Search for chat
-                search_box = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, search_box_xpath))
-                )
-                search_box.click()
+                # 1. Locate search box
+                search_box = None
+                for _ in range(5):
+                    search_box = get_search_box()
+                    if search_box:
+                        break
+                    time.sleep(1)
+                    
+                if not search_box:
+                    raise Exception("Could not locate WhatsApp search bar.")
+
+                # Focus and clear the search box thoroughly
+                try:
+                    search_box.click()
+                except Exception:
+                    driver.execute_script("arguments[0].click();", search_box)
                 time.sleep(0.5)
                 
-                active_el = driver.switch_to.active_element
-                active_el.clear()
-                active_el.send_keys(group_name)
-                time.sleep(3.0) # Wait for search results
+                # Select all and delete to clear existing text
+                search_box.send_keys(Keys.CONTROL + "a")
+                time.sleep(0.2)
+                search_box.send_keys(Keys.BACKSPACE)
+                time.sleep(0.5)
                 
-                # Check if search returned any contacts/groups in the side pane
+                # Paste group name via clipboard for accurate typing
+                pyperclip.copy(group_name)
+                search_box.send_keys(Keys.CONTROL + "v")
+                
+                # 2. Wait dynamically for search results to load
+                time.sleep(3.5)
+                
+                # Check for matching list items
                 list_items = driver.find_elements(By.XPATH, '//div[@id="pane-side"]//div[@role="listitem"]')
                 if len(list_items) == 0:
                     log_status(f"⚠️ No matches found in search for: {group_name}")
+                    # Clear search bar before continuing
+                    search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
                     continue
                     
-                # Click the first search result to open the chat
+                # Click the first search result item
                 try:
-                    list_items[0].click()
+                    driver.execute_script("arguments[0].click();", list_items[0])
                 except Exception:
-                    # Fallback to pressing ENTER
-                    active_el = driver.switch_to.active_element
-                    active_el.send_keys(Keys.ENTER)
+                    try:
+                        list_items[0].click()
+                    except Exception:
+                        search_box.send_keys(Keys.ENTER)
                 
                 time.sleep(2)
                 
-                # Copy and paste image
+                # 3. Copy image to clipboard and paste
                 copy_image_to_clipboard(image_path)
                 time.sleep(1)
                 
-                msg_box = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, "//div[@data-testid='conversation-compose-box-input']"))
-                )
+                # Locate message input compose box
+                msg_box_selectors = [
+                    "//div[@data-testid='conversation-compose-box-input']",
+                    "//footer//div[@contenteditable='true']",
+                    "//div[@role='textbox'][@data-tab='10']"
+                ]
+                msg_box = None
+                for sel in msg_box_selectors:
+                    try:
+                        msg_box = WebDriverWait(driver, 10).until(
+                            EC.element_to_be_clickable((By.XPATH, sel))
+                        )
+                        if msg_box:
+                            break
+                    except Exception:
+                        continue
+                        
+                if not msg_box:
+                    raise Exception("Could not open chat input box for group.")
+                    
                 msg_box.click()
                 time.sleep(0.5)
                 msg_box.send_keys(Keys.CONTROL, 'v')
                 
-                # Caption box
-                caption_box = WebDriverWait(driver, 10).until(
-                    EC.visibility_of_element_located((By.XPATH, "//div[@data-testid='media-caption-input-container']"))
-                )
+                # 4. Wait for image caption preview box
+                caption_selectors = [
+                    "//div[@data-testid='media-caption-input-container']",
+                    "//div[contains(@class, 'caption')]//div[@contenteditable='true']",
+                    "//div[@contenteditable='true'][@data-tab='10']"
+                ]
+                caption_box = None
+                for sel in caption_selectors:
+                    try:
+                        caption_box = WebDriverWait(driver, 10).until(
+                            EC.visibility_of_element_located((By.XPATH, sel))
+                        )
+                        if caption_box:
+                            break
+                    except Exception:
+                        continue
+                        
+                if not caption_box:
+                    raise Exception("Image preview modal did not appear.")
+                    
                 caption_box.click()
                 time.sleep(0.5)
                 
-                # Paste caption
+                # Paste caption text
                 pyperclip.copy(message_text)
                 caption_box.send_keys(Keys.CONTROL, 'v')
                 time.sleep(1)
                 
-                # Send
+                # Send the message
                 caption_box.send_keys(Keys.ENTER)
-                log_status(f"✅ Successfully sent to {group_name}!")
                 
-                # Wait for upload
-                time.sleep(4)
+                # 5. Wait dynamically for upload to finish (preview modal disappears)
+                upload_done = False
+                for _ in range(15):
+                    previews = driver.find_elements(By.XPATH, "//div[@data-testid='media-caption-input-container']")
+                    if len(previews) == 0:
+                        upload_done = True
+                        break
+                    time.sleep(1)
+                    
+                time.sleep(3)
+                log_status(f"✅ Successfully sent to {group_name}!")
                 
             except Exception as e:
                 log_status(f"❌ Failed for {group_name}: {str(e)}")
