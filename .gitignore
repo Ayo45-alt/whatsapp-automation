@@ -16,3 +16,7 @@ __pycache__/
 
 # VS Code config
 .vscode/
+
+chromedriver.exe
+chromedriver-win64/
+

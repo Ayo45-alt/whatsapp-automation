@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, jsonify, Response
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 from PIL import Image
 import win32clipboard
 import pyperclip
@@ -79,7 +81,20 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         options.add_argument("--start-maximized")
         options.binary_location = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
         
-        driver = webdriver.Chrome(options=options)
+        local_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
+        if not os.path.exists(local_driver_path):
+            local_driver_path = os.path.join(os.getcwd(), "chromedriver-win64", "chromedriver.exe")
+
+        if os.path.exists(local_driver_path):
+            service = Service(executable_path=local_driver_path)
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            try:
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+            except Exception:
+                driver = webdriver.Chrome(options=options)
+            
         driver.get("https://web.whatsapp.com")
         
         log_status("⏳ Waiting for WhatsApp Web to load...")
