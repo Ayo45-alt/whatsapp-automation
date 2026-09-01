@@ -115,30 +115,10 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         
         success = False
         start_time = time.time()
+        last_reconnect_click = 0
+        
         while time.time() - start_time < 300:  # 5 minutes timeout
-            # Check for "Use here" dialog
-            use_here_elements = driver.find_elements(By.XPATH, use_here_xpath)
-            if len(use_here_elements) > 0:
-                log_status("⚠️ Detected 'Use here' popup. Activating session in this window...")
-                try:
-                    driver.execute_script("arguments[0].click();", use_here_elements[0])
-                except Exception:
-                    pass
-                time.sleep(3)
-                continue
-                
-            # Check for Reconnect button
-            reconnect_elements = driver.find_elements(By.XPATH, reconnect_xpath)
-            if len(reconnect_elements) > 0:
-                log_status("⚠️ Detected network disconnect. Clicking Reconnect...")
-                try:
-                    driver.execute_script("arguments[0].click();", reconnect_elements[0])
-                except Exception:
-                    pass
-                time.sleep(3)
-                continue
-
-            # Check if search box or chat pane is loaded
+            # 1. Primary check: Is WhatsApp Web already loaded?
             found_search = False
             for sel in search_box_selectors:
                 elements = driver.find_elements(By.XPATH, sel)
@@ -146,13 +126,34 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     found_search = True
                     break
             
-            # Also check if sidebar chat pane exists
             pane_side = driver.find_elements(By.ID, "pane-side")
             if found_search or len(pane_side) > 0:
                 log_status("✅ WhatsApp Web loaded successfully!")
                 success = True
                 break
                 
+            # 2. Check for "Use here" session conflict popup
+            use_here_elements = driver.find_elements(By.XPATH, use_here_xpath)
+            if len(use_here_elements) > 0:
+                log_status("⚠️ Detected 'Use here' popup. Activating session in this window...")
+                try:
+                    driver.execute_script("arguments[0].click();", use_here_elements[0])
+                except Exception:
+                    pass
+                time.sleep(2)
+                continue
+                
+            # 3. Check for "Reconnect" button if disconnected (throttled to once every 10s)
+            if time.time() - last_reconnect_click > 10:
+                reconnect_elements = driver.find_elements(By.XPATH, reconnect_xpath)
+                if len(reconnect_elements) > 0:
+                    log_status("⚠️ Detected network reconnect prompt. Clicking Reconnect...")
+                    try:
+                        driver.execute_script("arguments[0].click();", reconnect_elements[0])
+                    except Exception:
+                        pass
+                    last_reconnect_click = time.time()
+            
             time.sleep(2)
             
         if not success:
