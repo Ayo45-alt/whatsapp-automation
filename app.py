@@ -111,14 +111,21 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         ]
         
         use_here_xpath = "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'use here')]"
-        reconnect_xpath = "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'reconnect')]"
+        reconnect_xpath = "//*[contains(text(), 'Computer not connected')]//following::*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'reconnect')] | //button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'reconnect')]"
+        qr_selectors = [
+            "//canvas[@aria-label='Scan me!']",
+            "//div[@data-ref]",
+            "//*[contains(text(), 'Scan to log in')]",
+            "//*[contains(text(), 'To use WhatsApp on your computer')]"
+        ]
         
         success = False
         start_time = time.time()
         last_reconnect_click = 0
+        qr_notified = False
         
         while time.time() - start_time < 300:  # 5 minutes timeout
-            # 1. Primary check: Is WhatsApp Web already loaded?
+            # 1. Primary check: Is WhatsApp Web already loaded and logged in?
             found_search = False
             for sel in search_box_selectors:
                 elements = driver.find_elements(By.XPATH, sel)
@@ -143,7 +150,16 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 time.sleep(2)
                 continue
                 
-            # 3. Check for "Reconnect" button if disconnected (throttled to once every 10s)
+            # 3. Check for QR Code login prompt
+            if not qr_notified:
+                for qr_sel in qr_selectors:
+                    qr_elements = driver.find_elements(By.XPATH, qr_sel)
+                    if len(qr_elements) > 0:
+                        log_status("📱 WhatsApp Web requires login. Please scan the QR code in the open Chrome window with your WhatsApp mobile app!")
+                        qr_notified = True
+                        break
+                        
+            # 4. Check for "Reconnect" button if disconnected (throttled to once every 10s)
             if time.time() - last_reconnect_click > 10:
                 reconnect_elements = driver.find_elements(By.XPATH, reconnect_xpath)
                 if len(reconnect_elements) > 0:
