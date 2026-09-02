@@ -311,31 +311,15 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                         pass
                     continue
                 
-                # 3. Copy image to clipboard and paste
+                # 3. Focus compose box, copy image to clipboard, and paste
                 copy_image_to_clipboard(image_path)
                 time.sleep(1)
                 
-                # Locate message input compose box
-                msg_box_selectors = [
-                    "//div[@data-testid='conversation-compose-box-input']",
-                    "//footer//div[@contenteditable='true']",
-                    "//div[@role='textbox'][@data-tab='10']"
-                ]
-                msg_box = None
-                for sel in msg_box_selectors:
-                    try:
-                        msg_box = WebDriverWait(driver, 10).until(
-                            EC.element_to_be_clickable((By.XPATH, sel))
-                        )
-                        if msg_box:
-                            break
-                    except Exception:
-                        continue
-                        
-                if not msg_box:
-                    raise Exception("Could not open chat input box for group.")
-                    
-                msg_box.click()
+                try:
+                    driver.execute_script("arguments[0].focus();", msg_box)
+                    msg_box.click()
+                except Exception:
+                    pass
                 time.sleep(0.5)
                 msg_box.send_keys(Keys.CONTROL, 'v')
                 
@@ -346,20 +330,27 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     "//div[@contenteditable='true'][@data-tab='10']"
                 ]
                 caption_box = None
-                for sel in caption_selectors:
-                    try:
-                        caption_box = WebDriverWait(driver, 10).until(
-                            EC.visibility_of_element_located((By.XPATH, sel))
-                        )
-                        if caption_box:
-                            break
-                    except Exception:
-                        continue
-                        
+                for _ in range(15):
+                    for sel in caption_selectors:
+                        try:
+                            el = driver.find_element(By.XPATH, sel)
+                            if el.is_displayed():
+                                caption_box = el
+                                break
+                        except Exception:
+                            continue
+                    if caption_box:
+                        break
+                    time.sleep(1)
+                    
                 if not caption_box:
                     raise Exception("Image preview modal did not appear.")
                     
-                caption_box.click()
+                try:
+                    driver.execute_script("arguments[0].focus();", caption_box)
+                    caption_box.click()
+                except Exception:
+                    pass
                 time.sleep(0.5)
                 
                 # Paste caption text
@@ -367,19 +358,35 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 caption_box.send_keys(Keys.CONTROL, 'v')
                 time.sleep(1)
                 
-                # Send the message
+                # Send the message (press Enter + check send button)
                 caption_box.send_keys(Keys.ENTER)
+                time.sleep(0.5)
+                
+                send_btn_selectors = [
+                    "//span[@data-icon='send']",
+                    "//div[@role='button'][@aria-label='Send']",
+                    "//span[@data-testid='send']",
+                    "//button[@aria-label='Send']"
+                ]
+                for sel in send_btn_selectors:
+                    send_btns = driver.find_elements(By.XPATH, sel)
+                    if len(send_btns) > 0:
+                        try:
+                            driver.execute_script("arguments[0].click();", send_btns[0])
+                        except Exception:
+                            pass
+                        break
                 
                 # 5. Wait dynamically for upload to finish (preview modal disappears)
                 upload_done = False
-                for _ in range(15):
+                for _ in range(20):
                     previews = driver.find_elements(By.XPATH, "//div[@data-testid='media-caption-input-container']")
                     if len(previews) == 0:
                         upload_done = True
                         break
                     time.sleep(1)
                     
-                time.sleep(3)
+                time.sleep(2.5)
                 log_status(f"✅ Successfully sent to {group_name}!")
                 
             except Exception as e:
