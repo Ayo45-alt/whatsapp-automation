@@ -242,27 +242,51 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 pyperclip.copy(group_name)
                 search_box.send_keys(Keys.CONTROL + "v")
                 
-                # 2. Wait dynamically for search results to load
-                time.sleep(3.5)
+                # 2. Wait dynamically for search results and select the chat
+                time.sleep(2.0)
                 
-                # Check for matching list items
-                list_items = driver.find_elements(By.XPATH, '//div[@id="pane-side"]//div[@role="listitem"]')
-                if len(list_items) == 0:
-                    log_status(f"⚠️ No matches found in search for: {group_name}")
-                    # Clear search bar before continuing
-                    search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
-                    continue
-                    
-                # Click the first search result item
+                # Send ENTER to select top match from search
+                search_box.send_keys(Keys.ENTER)
+                time.sleep(1.0)
+                
+                # Also try direct click on any matching chat item in the sidebar
                 try:
-                    driver.execute_script("arguments[0].click();", list_items[0])
+                    chat_items = driver.find_elements(By.XPATH, "//div[@id='pane-side']//div[@tabindex='-1'] | //div[@id='pane-side']//span[@title]")
+                    if len(chat_items) > 0:
+                        driver.execute_script("arguments[0].click();", chat_items[0])
                 except Exception:
-                    try:
-                        list_items[0].click()
-                    except Exception:
-                        search_box.send_keys(Keys.ENTER)
+                    pass
+                    
+                time.sleep(1.5)
                 
-                time.sleep(2)
+                # 3. Locate message input compose box to confirm chat is open
+                msg_box_selectors = [
+                    "//div[@data-testid='conversation-compose-box-input']",
+                    "//footer//div[@contenteditable='true']",
+                    "//div[@role='textbox'][@data-tab='10']",
+                    "//footer//p"
+                ]
+                msg_box = None
+                for _ in range(8):
+                    for sel in msg_box_selectors:
+                        try:
+                            el = driver.find_element(By.XPATH, sel)
+                            if el.is_displayed():
+                                msg_box = el
+                                break
+                        except Exception:
+                            continue
+                    if msg_box:
+                        break
+                    time.sleep(1)
+                    
+                if not msg_box:
+                    log_status(f"⚠️ Could not open chat for: {group_name} (Chat not found or failed to load)")
+                    try:
+                        search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
+                    except Exception:
+                        pass
+                    continue
                 
                 # 3. Copy image to clipboard and paste
                 copy_image_to_clipboard(image_path)
