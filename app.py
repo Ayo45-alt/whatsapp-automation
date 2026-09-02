@@ -311,23 +311,52 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                         pass
                     continue
                 
-                # 3. Focus compose box, copy image to clipboard, and paste
-                copy_image_to_clipboard(image_path)
-                time.sleep(1)
+                # 3. Attach Image (Direct File Input -> Attach Button -> Clipboard Fallback)
+                abs_img_path = os.path.abspath(image_path)
+                image_attached = False
                 
-                try:
-                    driver.execute_script("arguments[0].focus();", msg_box)
-                    msg_box.click()
-                except Exception:
-                    pass
-                time.sleep(0.5)
-                msg_box.send_keys(Keys.CONTROL, 'v')
+                # Method A: Direct File Input
+                file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
+                if len(file_inputs) > 0:
+                    try:
+                        file_inputs[0].send_keys(abs_img_path)
+                        image_attached = True
+                    except Exception:
+                        pass
+                        
+                # Method B: Click Plus/Attach button then send to file input
+                if not image_attached:
+                    attach_btns = driver.find_elements(By.XPATH, "//div[@title='Attach'] | //span[@data-icon='plus'] | //span[@data-icon='attach-menu-plus'] | //button[@title='Attach'] | //div[@role='button'][@aria-label='Attach']")
+                    if len(attach_btns) > 0:
+                        try:
+                            driver.execute_script("arguments[0].click();", attach_btns[0])
+                            time.sleep(1)
+                            file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
+                            if len(file_inputs) > 0:
+                                file_inputs[0].send_keys(abs_img_path)
+                                image_attached = True
+                        except Exception:
+                            pass
+                            
+                # Method C: Clipboard Paste Fallback
+                if not image_attached:
+                    copy_image_to_clipboard(image_path)
+                    time.sleep(0.5)
+                    try:
+                        driver.execute_script("arguments[0].focus();", msg_box)
+                        msg_box.click()
+                    except Exception:
+                        pass
+                    time.sleep(0.5)
+                    msg_box.send_keys(Keys.CONTROL, 'v')
                 
-                # 4. Wait for image caption preview box
+                # 4. Wait for Image Media Preview Modal
                 caption_selectors = [
+                    "//div[@data-testid='media-caption-input-container']//div[@contenteditable='true']",
+                    "//div[@data-testid='media-caption-input-container']//p",
                     "//div[@data-testid='media-caption-input-container']",
-                    "//div[contains(@class, 'caption')]//div[@contenteditable='true']",
-                    "//div[@contenteditable='true'][@data-tab='10']"
+                    "//div[contains(@class, 'media-caption')]//div[@contenteditable='true']",
+                    "//div[contains(@aria-label, 'caption') or contains(@aria-label, 'Caption')]"
                 ]
                 caption_box = None
                 for _ in range(15):
@@ -344,7 +373,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     time.sleep(1)
                     
                 if not caption_box:
-                    raise Exception("Image preview modal did not appear.")
+                    raise Exception("Image preview modal did not open. Image attachment failed.")
                     
                 try:
                     driver.execute_script("arguments[0].focus();", caption_box)
@@ -353,12 +382,12 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     pass
                 time.sleep(0.5)
                 
-                # Paste caption text
+                # Paste caption text inside the image preview modal
                 pyperclip.copy(message_text)
                 caption_box.send_keys(Keys.CONTROL, 'v')
                 time.sleep(1)
                 
-                # Send the message (press Enter + check send button)
+                # Send the photo + caption together (Enter + Send Button)
                 caption_box.send_keys(Keys.ENTER)
                 time.sleep(0.5)
                 
