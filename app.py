@@ -79,6 +79,10 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         options.add_argument(r"user-data-dir=C:\Users\USER\Desktop\whatsapp_profile_copy")
         options.add_argument("profile-directory=Profile 11")
         options.add_argument("--start-maximized")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--window-position=0,0")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-blink-features=AutomationControlled")
         options.binary_location = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
         
         local_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
@@ -95,6 +99,25 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
             except Exception:
                 driver = webdriver.Chrome(options=options)
             
+        try:
+            driver.maximize_window()
+            driver.switch_to.window(driver.current_window_handle)
+        except Exception:
+            pass
+
+        try:
+            import win32gui
+            import win32con
+            def bring_chrome_to_front(hwnd, _):
+                title = win32gui.GetWindowText(hwnd)
+                if 'WhatsApp' in title or 'Chrome' in title:
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                    win32gui.SetForegroundWindow(hwnd)
+            win32gui.EnumWindows(bring_chrome_to_front, None)
+        except Exception:
+            pass
+
         driver.get("https://web.whatsapp.com")
         
         log_status("⏳ Waiting for WhatsApp Web to load...")
