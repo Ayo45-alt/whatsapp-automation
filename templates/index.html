@@ -96,6 +96,22 @@
         </main>
     </div>
 
+    <!-- QR Code Scan Modal -->
+    <div class="qr-modal-overlay" id="qrModal" style="display: none;">
+        <div class="qr-modal-card">
+            <div class="qr-modal-header">
+                <h3><i class="fa-solid fa-qrcode"></i> Scan to Link WhatsApp</h3>
+                <p>Open WhatsApp on your phone &rarr; <b>Linked Devices</b> &rarr; <b>Link a Device</b>, and point your camera at this QR code.</p>
+            </div>
+            <div class="qr-image-wrapper">
+                <img id="qrImage" src="" alt="WhatsApp QR Code">
+            </div>
+            <div class="qr-modal-footer">
+                <span><i class="fa-solid fa-shield-halved"></i> Automatically continues as soon as you scan!</span>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

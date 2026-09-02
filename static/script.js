@@ -235,6 +235,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (event.data.trim() === '') return; // ping keep-alive
             
             const msg = event.data;
+            
+            // Handle QR code display signals
+            if (msg.includes('[SHOW_QR_CODE]')) {
+                const qrModal = document.getElementById('qrModal');
+                const qrImage = document.getElementById('qrImage');
+                if (qrModal && qrImage) {
+                    qrImage.src = '/static/qr_code.png?t=' + Date.now();
+                    qrModal.style.display = 'flex';
+                }
+                return;
+            }
+            if (msg.includes('[HIDE_QR_CODE]') || msg.includes('WhatsApp Web loaded successfully')) {
+                const qrModal = document.getElementById('qrModal');
+                if (qrModal) qrModal.style.display = 'none';
+            }
+
             if (msg.includes('❌') || msg.includes('💥')) {
                 log(msg, 'error');
             } else if (msg.includes('✅') || msg.includes('🎉')) {
@@ -242,8 +258,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 log(msg, 'system');
             }
-            
+
             if (msg.includes('Broadcast complete!') || msg.includes('Critical Error') || msg.includes('Browser closed.')) {
+                const qrModal = document.getElementById('qrModal');
+                if (qrModal) qrModal.style.display = 'none';
                 setTimeout(() => {
                     setUIStateIdle();
                     if (eventSource) {

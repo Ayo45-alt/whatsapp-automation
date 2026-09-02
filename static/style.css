@@ -550,3 +550,73 @@ textarea:focus, input[type="text"]:focus {
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.15);
 }
+
+/* QR Code Scan Modal */
+.qr-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.qr-modal-card {
+    background: #18222d;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 2.2rem;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+}
+
+.qr-modal-header h3 {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    color: #ffffff;
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+.qr-modal-header h3 i {
+    color: var(--color-whatsapp);
+}
+
+.qr-modal-header p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+}
+
+.qr-image-wrapper {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 1.2rem;
+    display: inline-block;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.qr-image-wrapper img {
+    display: block;
+    width: 250px;
+    height: 250px;
+    object-fit: contain;
+}
+
+.qr-modal-footer {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+

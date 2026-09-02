@@ -136,6 +136,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
             pane_side = driver.find_elements(By.ID, "pane-side")
             if found_search or len(pane_side) > 0:
                 log_status("✅ WhatsApp Web loaded successfully!")
+                log_status("[HIDE_QR_CODE]")
                 success = True
                 break
                 
@@ -150,14 +151,36 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 time.sleep(2)
                 continue
                 
-            # 3. Check for QR Code login prompt
-            if not qr_notified:
-                for qr_sel in qr_selectors:
-                    qr_elements = driver.find_elements(By.XPATH, qr_sel)
-                    if len(qr_elements) > 0:
-                        log_status("📱 WhatsApp Web requires login. Please scan the QR code in the open Chrome window with your WhatsApp mobile app!")
-                        qr_notified = True
-                        break
+            # 3. Check for QR Code login prompt & Auto-reload expired QR
+            qr_found = False
+            for qr_sel in qr_selectors:
+                qr_elements = driver.find_elements(By.XPATH, qr_sel)
+                if len(qr_elements) > 0:
+                    qr_found = True
+                    break
+                    
+            if qr_found:
+                # Check if QR expired button is shown
+                reload_btns = driver.find_elements(By.XPATH, "//div[@data-ref]//button | //button[contains(., 'reload')] | //span[contains(text(), 'Click to reload')] | //div[contains(@class, 'qr-wrapper')]//button")
+                if len(reload_btns) > 0:
+                    try:
+                        driver.execute_script("arguments[0].click();", reload_btns[0])
+                        time.sleep(1.5)
+                    except Exception:
+                        pass
+                
+                # Save screenshot of QR code to static/qr_code.png
+                try:
+                    qr_img_path = os.path.join(os.getcwd(), 'static', 'qr_code.png')
+                    driver.save_screenshot(qr_img_path)
+                except Exception:
+                    pass
+                    
+                if not qr_notified:
+                    log_status("📱 WhatsApp requires login. Scan the QR code shown on your dashboard screen!")
+                    qr_notified = True
+                    
+                log_status("[SHOW_QR_CODE]")
                         
             # 4. Check for "Reconnect" button if disconnected (throttled to once every 10s)
             if time.time() - last_reconnect_click > 10:
