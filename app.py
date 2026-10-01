@@ -314,6 +314,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 # 3. Attach Image (Direct File Input -> Attach Button -> Clipboard Fallback)
                 abs_img_path = os.path.abspath(image_path)
                 image_attached = False
+                log_status(f"📎 Attaching image: {abs_img_path}")
                 
                 # Method A: Direct File Input
                 file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
@@ -321,8 +322,9 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     try:
                         file_inputs[0].send_keys(abs_img_path)
                         image_attached = True
-                    except Exception:
-                        pass
+                        log_status("📎 Image attached via direct file input (Method A)")
+                    except Exception as e:
+                        log_status(f"⚠️ Method A failed: {e}")
                         
                 # Method B: Click Plus/Attach button then send to file input
                 if not image_attached:
@@ -330,16 +332,22 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     if len(attach_btns) > 0:
                         try:
                             driver.execute_script("arguments[0].click();", attach_btns[0])
-                            time.sleep(1)
+                            time.sleep(1.5)
                             file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
                             if len(file_inputs) > 0:
                                 file_inputs[0].send_keys(abs_img_path)
                                 image_attached = True
-                        except Exception:
-                            pass
+                                log_status("📎 Image attached via attach button (Method B)")
+                            else:
+                                log_status("⚠️ Method B: Attach menu opened but no file input found")
+                        except Exception as e:
+                            log_status(f"⚠️ Method B failed: {e}")
+                    else:
+                        log_status("⚠️ Method B: No attach button found on page")
                             
                 # Method C: Clipboard Paste Fallback
                 if not image_attached:
+                    log_status("📎 Trying clipboard paste fallback (Method C)...")
                     copy_image_to_clipboard(image_path)
                     time.sleep(0.5)
                     try:
@@ -349,17 +357,36 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                         pass
                     time.sleep(0.5)
                     msg_box.send_keys(Keys.CONTROL, 'v')
+                    log_status("📎 Clipboard paste sent (Method C)")
                 
                 # 4. Wait for Image Media Preview Modal
+                # First verify the media preview container itself exists
+                media_preview_found = False
+                for _ in range(15):
+                    media_containers = driver.find_elements(By.XPATH, 
+                        "//div[@data-testid='media-caption-input-container'] | "
+                        "//div[@data-testid='image-preview'] | "
+                        "//div[@data-testid='media-editor'] | "
+                        "//div[contains(@class, 'media-panel')]"
+                    )
+                    if len(media_containers) > 0:
+                        media_preview_found = True
+                        log_status("📎 Image preview modal detected!")
+                        break
+                    time.sleep(1)
+                
+                if not media_preview_found:
+                    raise Exception("❌ Image preview modal NEVER appeared. Image was NOT attached. Skipping this group to avoid sending text-only.")
+                
+                # Now find the caption input inside the media preview
                 caption_selectors = [
                     "//div[@data-testid='media-caption-input-container']//div[@contenteditable='true']",
                     "//div[@data-testid='media-caption-input-container']//p",
-                    "//div[@data-testid='media-caption-input-container']",
                     "//div[contains(@class, 'media-caption')]//div[@contenteditable='true']",
                     "//div[contains(@aria-label, 'caption') or contains(@aria-label, 'Caption')]"
                 ]
                 caption_box = None
-                for _ in range(15):
+                for _ in range(5):
                     for sel in caption_selectors:
                         try:
                             el = driver.find_element(By.XPATH, sel)
@@ -373,7 +400,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     time.sleep(1)
                     
                 if not caption_box:
-                    raise Exception("Image preview modal did not open. Image attachment failed.")
+                    raise Exception("Image preview modal appeared but caption input not found.")
                     
                 try:
                     driver.execute_script("arguments[0].focus();", caption_box)
