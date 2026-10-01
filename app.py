@@ -84,19 +84,20 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.binary_location = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-        
-        local_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
-        if not os.path.exists(local_driver_path):
-            local_driver_path = os.path.join(os.getcwd(), "chromedriver-win64", "chromedriver.exe")
-
-        if os.path.exists(local_driver_path):
-            service = Service(executable_path=local_driver_path)
+        # Use webdriver-manager to auto-match Chrome version (handles updates automatically)
+        try:
+            service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
-        else:
-            try:
-                service = Service(ChromeDriverManager().install())
+            log_status("✅ ChromeDriver loaded via webdriver-manager (auto-matched)")
+        except Exception as wdm_err:
+            log_status(f"⚠️ webdriver-manager failed ({wdm_err}), trying local chromedriver...")
+            local_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
+            if not os.path.exists(local_driver_path):
+                local_driver_path = os.path.join(os.getcwd(), "chromedriver-win64", "chromedriver.exe")
+            if os.path.exists(local_driver_path):
+                service = Service(executable_path=local_driver_path)
                 driver = webdriver.Chrome(service=service, options=options)
-            except Exception:
+            else:
                 driver = webdriver.Chrome(options=options)
             
         try:
