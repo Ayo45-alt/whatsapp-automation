@@ -254,24 +254,23 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     search_box.click()
                 except Exception:
                     driver.execute_script("arguments[0].click();", search_box)
-                time.sleep(0.5)
+                time.sleep(0.2)
                 
                 # Select all and delete to clear existing text
                 search_box.send_keys(Keys.CONTROL + "a")
-                time.sleep(0.2)
                 search_box.send_keys(Keys.BACKSPACE)
-                time.sleep(0.5)
+                time.sleep(0.3)
                 
                 # Paste group name via clipboard for accurate typing
                 pyperclip.copy(group_name)
                 search_box.send_keys(Keys.CONTROL + "v")
                 
-                # 2. Wait dynamically for search results and select the chat
-                time.sleep(2.0)
+                # 2. Wait for search results and select the chat
+                time.sleep(1.5)
                 
                 # Send ENTER to select top match from search
                 search_box.send_keys(Keys.ENTER)
-                time.sleep(1.0)
+                time.sleep(0.5)
                 
                 # Also try direct click on any matching chat item in the sidebar
                 try:
@@ -281,7 +280,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 except Exception:
                     pass
                     
-                time.sleep(1.5)
+                time.sleep(0.5)
                 
                 # 3. Locate message input compose box to confirm chat is open
                 msg_box_selectors = [
@@ -291,7 +290,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     "//footer//p"
                 ]
                 msg_box = None
-                for _ in range(8):
+                for _ in range(5):
                     for sel in msg_box_selectors:
                         try:
                             el = driver.find_element(By.XPATH, sel)
@@ -302,7 +301,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                             continue
                     if msg_box:
                         break
-                    time.sleep(1)
+                    time.sleep(0.5)
                     
                 if not msg_box:
                     log_status(f"⚠️ Could not open chat for: {group_name} (Chat not found or failed to load)")
@@ -315,7 +314,6 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 # 3. Attach Image (Direct File Input -> Attach Button -> Clipboard Fallback)
                 abs_img_path = os.path.abspath(image_path)
                 image_attached = False
-                log_status(f"📎 Attaching image: {abs_img_path}")
                 
                 # Method A: Direct File Input
                 file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
@@ -323,9 +321,9 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     try:
                         file_inputs[0].send_keys(abs_img_path)
                         image_attached = True
-                        log_status("📎 Image attached via direct file input (Method A)")
+                        log_status("📎 Image attached (Method A)")
                     except Exception as e:
-                        log_status(f"⚠️ Method A failed: {e}")
+                        pass
                         
                 # Method B: Click Plus/Attach button then send to file input
                 if not image_attached:
@@ -333,37 +331,31 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     if len(attach_btns) > 0:
                         try:
                             driver.execute_script("arguments[0].click();", attach_btns[0])
-                            time.sleep(1.5)
+                            time.sleep(0.8)
                             file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
                             if len(file_inputs) > 0:
                                 file_inputs[0].send_keys(abs_img_path)
                                 image_attached = True
-                                log_status("📎 Image attached via attach button (Method B)")
-                            else:
-                                log_status("⚠️ Method B: Attach menu opened but no file input found")
-                        except Exception as e:
-                            log_status(f"⚠️ Method B failed: {e}")
-                    else:
-                        log_status("⚠️ Method B: No attach button found on page")
+                                log_status("📎 Image attached (Method B)")
+                        except Exception:
+                            pass
                             
                 # Method C: Clipboard Paste Fallback
                 if not image_attached:
-                    log_status("📎 Trying clipboard paste fallback (Method C)...")
                     copy_image_to_clipboard(image_path)
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     try:
                         driver.execute_script("arguments[0].focus();", msg_box)
                         msg_box.click()
                     except Exception:
                         pass
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     msg_box.send_keys(Keys.CONTROL, 'v')
-                    log_status("📎 Clipboard paste sent (Method C)")
+                    log_status("📎 Image attached (Method C)")
                 
                 # 4. Wait for Image Media Preview Modal
-                # First verify the media preview container itself exists
                 media_preview_found = False
-                for _ in range(15):
+                for _ in range(10):
                     media_containers = driver.find_elements(By.XPATH, 
                         "//div[@data-testid='media-caption-input-container'] | "
                         "//div[@data-testid='image-preview'] | "
@@ -372,14 +364,13 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     )
                     if len(media_containers) > 0:
                         media_preview_found = True
-                        log_status("📎 Image preview modal detected!")
                         break
-                    time.sleep(1)
+                    time.sleep(0.5)
                 
                 if not media_preview_found:
-                    raise Exception("❌ Image preview modal NEVER appeared. Image was NOT attached. Skipping this group to avoid sending text-only.")
+                    raise Exception("Image preview modal NEVER appeared. Skipping to avoid text-only send.")
                 
-                # Now find the caption input inside the media preview
+                # Find the caption input inside the media preview
                 caption_selectors = [
                     "//div[@data-testid='media-caption-input-container']//div[@contenteditable='true']",
                     "//div[@data-testid='media-caption-input-container']//p",
@@ -387,7 +378,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     "//div[contains(@aria-label, 'caption') or contains(@aria-label, 'Caption')]"
                 ]
                 caption_box = None
-                for _ in range(5):
+                for _ in range(4):
                     for sel in caption_selectors:
                         try:
                             el = driver.find_element(By.XPATH, sel)
@@ -398,26 +389,26 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                             continue
                     if caption_box:
                         break
-                    time.sleep(1)
+                    time.sleep(0.5)
                     
                 if not caption_box:
-                    raise Exception("Image preview modal appeared but caption input not found.")
+                    raise Exception("Caption input not found in image preview.")
                     
                 try:
                     driver.execute_script("arguments[0].focus();", caption_box)
                     caption_box.click()
                 except Exception:
                     pass
-                time.sleep(0.5)
+                time.sleep(0.2)
                 
-                # Paste caption text inside the image preview modal
+                # Paste caption text
                 pyperclip.copy(message_text)
                 caption_box.send_keys(Keys.CONTROL, 'v')
-                time.sleep(1)
+                time.sleep(0.3)
                 
-                # Send the photo + caption together (Enter + Send Button)
+                # Send (Enter + Send Button)
                 caption_box.send_keys(Keys.ENTER)
-                time.sleep(0.5)
+                time.sleep(0.3)
                 
                 send_btn_selectors = [
                     "//span[@data-icon='send']",
@@ -434,17 +425,15 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                             pass
                         break
                 
-                # 5. Wait dynamically for upload to finish (preview modal disappears)
-                upload_done = False
-                for _ in range(20):
+                # 5. Wait for upload to finish (preview modal disappears)
+                for _ in range(15):
                     previews = driver.find_elements(By.XPATH, "//div[@data-testid='media-caption-input-container']")
                     if len(previews) == 0:
-                        upload_done = True
                         break
-                    time.sleep(1)
+                    time.sleep(0.5)
                     
-                time.sleep(2.5)
-                log_status(f"✅ Successfully sent to {group_name}!")
+                time.sleep(1)
+                log_status(f"✅ Sent to {group_name}!")
                 
             except Exception as e:
                 log_status(f"❌ Failed for {group_name}: {str(e)}")
