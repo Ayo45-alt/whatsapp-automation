@@ -75,6 +75,18 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
     driver = None
     try:
         log_status("🚀 Launching Chrome browser...")
+        # Clean up any leftover chromedriver or stuck automation chrome processes locking the profile
+        try:
+            import subprocess
+            subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["powershell", "-Command", "Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe' AND CommandLine LIKE '%whatsapp_profile_copy%'\" | Invoke-CimMethod -MethodName Terminate"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            time.sleep(0.5)
+        except Exception:
+            pass
+
         options = Options()
         options.add_argument(r"user-data-dir=C:\Users\USER\Desktop\whatsapp_profile_copy")
         options.add_argument("profile-directory=Profile 11")
@@ -308,36 +320,52 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                         pass
                     continue
                 
-                # 3. Attach Image (Direct File Input -> Attach Button -> Clipboard Fallback)
+                # 3. Attach Image (Photos & Videos Input -> Attach Button -> Clipboard Fallback)
                 abs_img_path = os.path.abspath(image_path)
                 image_attached = False
+                photo_input_xpath = "//input[@type='file' and contains(@accept, 'image/*') and contains(@accept, 'video')]"
                 
-                # Method A: Direct File Input
-                file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
-                if len(file_inputs) > 0:
+                # Method A: Direct Photos & Videos File Input
+                photo_inputs = driver.find_elements(By.XPATH, photo_input_xpath)
+                if len(photo_inputs) > 0:
                     try:
-                        file_inputs[0].send_keys(abs_img_path)
+                        photo_inputs[0].send_keys(abs_img_path)
                         image_attached = True
-                        log_status("📎 Image attached (Method A)")
-                    except Exception as e:
+                        log_status("📎 Image attached via Photos/Videos input (Method A)")
+                    except Exception:
                         pass
                         
-                # Method B: Click Plus/Attach button then send to file input
+                # Method B: Click Plus/Attach button then send to Photos & Videos file input
                 if not image_attached:
-                    attach_btns = driver.find_elements(By.XPATH, "//div[@title='Attach'] | //span[@data-icon='plus'] | //span[@data-icon='attach-menu-plus'] | //button[@title='Attach'] | //div[@role='button'][@aria-label='Attach']")
+                    attach_btns = driver.find_elements(By.XPATH, "//div[@title='Attach'] | //span[@data-icon='plus'] | //span[@data-icon='plus-rounded'] | //span[@data-icon='attach-menu-plus'] | //button[@title='Attach'] | //div[@role='button'][@aria-label='Attach'] | //button[@aria-label='Attach']")
                     if len(attach_btns) > 0:
                         try:
                             driver.execute_script("arguments[0].click();", attach_btns[0])
                             time.sleep(0.8)
-                            file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
-                            if len(file_inputs) > 0:
-                                file_inputs[0].send_keys(abs_img_path)
+                            photo_inputs = driver.find_elements(By.XPATH, photo_input_xpath)
+                            if len(photo_inputs) > 0:
+                                photo_inputs[0].send_keys(abs_img_path)
                                 image_attached = True
-                                log_status("📎 Image attached (Method B)")
+                                log_status("📎 Image attached via Attach menu (Method B)")
                         except Exception:
                             pass
                             
-                # Method C: Clipboard Paste Fallback
+                # Helper to check if media preview modal is open
+                preview_check_xpath = (
+                    "//div[@data-testid='media-caption-input-container'] | "
+                    "//div[@data-testid='image-preview'] | "
+                    "//div[@data-testid='media-editor'] | "
+                    "//div[contains(@class, 'media-panel')] | "
+                    "//div[@contenteditable='true' and (contains(@aria-placeholder, 'caption') or contains(@aria-placeholder, 'Caption') or contains(@aria-label, 'caption') or contains(@aria-label, 'Caption'))] | "
+                    "//span[@data-icon='media-editor-drawing' or @data-icon='crop']"
+                )
+                
+                if image_attached:
+                    time.sleep(1.2)
+                    if len(driver.find_elements(By.XPATH, preview_check_xpath)) == 0:
+                        image_attached = False
+                            
+                # Method C: Clipboard Paste Fallback (if A/B didn't open preview)
                 if not image_attached:
                     copy_image_to_clipboard(image_path)
                     time.sleep(0.3)
@@ -348,18 +376,12 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                         pass
                     time.sleep(0.3)
                     msg_box.send_keys(Keys.CONTROL, 'v')
-                    log_status("📎 Image attached (Method C)")
+                    log_status("📎 Image attached via Clipboard (Method C)")
                 
                 # 4. Wait for Image Media Preview Modal
                 media_preview_found = False
-                for _ in range(10):
-                    media_containers = driver.find_elements(By.XPATH, 
-                        "//div[@data-testid='media-caption-input-container'] | "
-                        "//div[@data-testid='image-preview'] | "
-                        "//div[@data-testid='media-editor'] | "
-                        "//div[contains(@class, 'media-panel')]"
-                    )
-                    if len(media_containers) > 0:
+                for _ in range(12):
+                    if len(driver.find_elements(By.XPATH, preview_check_xpath)) > 0:
                         media_preview_found = True
                         break
                     time.sleep(0.5)
@@ -369,13 +391,14 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 
                 # Find the caption input inside the media preview
                 caption_selectors = [
+                    "//div[@contenteditable='true' and (contains(@aria-placeholder, 'caption') or contains(@aria-placeholder, 'Caption') or contains(@aria-label, 'caption') or contains(@aria-label, 'Caption'))]",
                     "//div[@data-testid='media-caption-input-container']//div[@contenteditable='true']",
                     "//div[@data-testid='media-caption-input-container']//p",
                     "//div[contains(@class, 'media-caption')]//div[@contenteditable='true']",
                     "//div[contains(@aria-label, 'caption') or contains(@aria-label, 'Caption')]"
                 ]
                 caption_box = None
-                for _ in range(4):
+                for _ in range(6):
                     for sel in caption_selectors:
                         try:
                             el = driver.find_element(By.XPATH, sel)
@@ -401,17 +424,18 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 # Paste caption text
                 pyperclip.copy(message_text)
                 caption_box.send_keys(Keys.CONTROL, 'v')
-                time.sleep(0.3)
+                time.sleep(0.4)
                 
                 # Send (Enter + Send Button)
                 caption_box.send_keys(Keys.ENTER)
-                time.sleep(0.3)
+                time.sleep(0.4)
                 
                 send_btn_selectors = [
-                    "//span[@data-icon='send']",
                     "//div[@role='button'][@aria-label='Send']",
-                    "//span[@data-testid='send']",
-                    "//button[@aria-label='Send']"
+                    "//button[@aria-label='Send']",
+                    "//span[@data-icon='wds-ic-send-filled']",
+                    "//span[@data-icon='send']",
+                    "//span[@data-testid='send']"
                 ]
                 for sel in send_btn_selectors:
                     send_btns = driver.find_elements(By.XPATH, sel)
@@ -424,7 +448,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 
                 # 5. Wait for upload to finish (preview modal disappears)
                 for _ in range(15):
-                    previews = driver.find_elements(By.XPATH, "//div[@data-testid='media-caption-input-container']")
+                    previews = driver.find_elements(By.XPATH, preview_check_xpath)
                     if len(previews) == 0:
                         break
                     time.sleep(0.5)
