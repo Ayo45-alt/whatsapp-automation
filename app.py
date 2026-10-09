@@ -369,13 +369,30 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 if not image_attached:
                     copy_image_to_clipboard(image_path)
                     time.sleep(0.3)
+                    
+                    # Refetch msg_box freshly to avoid stale element reference
+                    target_box = None
+                    for sel in msg_box_selectors:
+                        try:
+                            found = driver.find_element(By.XPATH, sel)
+                            if found.is_displayed():
+                                target_box = found
+                                break
+                        except Exception:
+                            continue
+                    if not target_box:
+                        target_box = msg_box
+                        
                     try:
-                        driver.execute_script("arguments[0].focus();", msg_box)
-                        msg_box.click()
+                        driver.execute_script("arguments[0].focus();", target_box)
+                        target_box.click()
                     except Exception:
                         pass
                     time.sleep(0.3)
-                    msg_box.send_keys(Keys.CONTROL, 'v')
+                    try:
+                        target_box.send_keys(Keys.CONTROL, 'v')
+                    except Exception:
+                        driver.switch_to.active_element.send_keys(Keys.CONTROL, 'v')
                     log_status("📎 Image attached via Clipboard (Method C)")
                 
                 # 4. Wait for Image Media Preview Modal
