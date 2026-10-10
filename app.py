@@ -471,21 +471,39 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                             break
                         time.sleep(0.5)
                 else:
-                    # --- Text-Only Flow ---
+                    # Refetch msg_box freshly to ensure no stale element
+                    target_box = None
+                    for sel in msg_box_selectors:
+                        try:
+                            found = driver.find_element(By.XPATH, sel)
+                            if found.is_displayed():
+                                target_box = found
+                                break
+                        except Exception:
+                            continue
+                    if not target_box:
+                        target_box = msg_box
+
                     try:
-                        driver.execute_script("arguments[0].focus();", msg_box)
-                        msg_box.click()
+                        driver.execute_script("arguments[0].focus();", target_box)
+                        target_box.click()
                     except Exception:
                         pass
                     time.sleep(0.2)
                     
-                    # Paste text into message box
+                    # Paste text into message box via clipboard
                     pyperclip.copy(message_text)
-                    msg_box.send_keys(Keys.CONTROL, 'v')
+                    try:
+                        target_box.send_keys(Keys.CONTROL, 'v')
+                    except Exception:
+                        driver.switch_to.active_element.send_keys(Keys.CONTROL, 'v')
                     time.sleep(0.4)
                     
                     # Press Enter to send text
-                    msg_box.send_keys(Keys.ENTER)
+                    try:
+                        target_box.send_keys(Keys.ENTER)
+                    except Exception:
+                        driver.switch_to.active_element.send_keys(Keys.ENTER)
                     time.sleep(0.4)
                     
                     # Also click send button if still visible
