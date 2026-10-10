@@ -320,155 +320,190 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                         pass
                     continue
                 
-                # 3. Attach Image (Photos & Videos Input -> Attach Button -> Clipboard Fallback)
-                abs_img_path = os.path.abspath(image_path)
-                image_attached = False
-                photo_input_xpath = "//input[@type='file' and contains(@accept, 'image/*') and contains(@accept, 'video')]"
-                
-                # Method A: Direct Photos & Videos File Input
-                photo_inputs = driver.find_elements(By.XPATH, photo_input_xpath)
-                if len(photo_inputs) > 0:
-                    try:
-                        photo_inputs[0].send_keys(abs_img_path)
-                        image_attached = True
-                        log_status("📎 Image attached via Photos/Videos input (Method A)")
-                    except Exception:
-                        pass
-                        
-                # Method B: Click Plus/Attach button then send to Photos & Videos file input
-                if not image_attached:
-                    attach_btns = driver.find_elements(By.XPATH, "//div[@title='Attach'] | //span[@data-icon='plus'] | //span[@data-icon='plus-rounded'] | //span[@data-icon='attach-menu-plus'] | //button[@title='Attach'] | //div[@role='button'][@aria-label='Attach'] | //button[@aria-label='Attach']")
-                    if len(attach_btns) > 0:
+                # 3. Send Message (Image + Caption, OR Text Only)
+                if image_path and os.path.exists(image_path):
+                    # --- Image + Caption Flow ---
+                    abs_img_path = os.path.abspath(image_path)
+                    image_attached = False
+                    photo_input_xpath = "//input[@type='file' and contains(@accept, 'image/*') and contains(@accept, 'video')]"
+                    
+                    # Method A: Direct Photos & Videos File Input
+                    photo_inputs = driver.find_elements(By.XPATH, photo_input_xpath)
+                    if len(photo_inputs) > 0:
                         try:
-                            driver.execute_script("arguments[0].click();", attach_btns[0])
-                            time.sleep(0.8)
-                            photo_inputs = driver.find_elements(By.XPATH, photo_input_xpath)
-                            if len(photo_inputs) > 0:
-                                photo_inputs[0].send_keys(abs_img_path)
-                                image_attached = True
-                                log_status("📎 Image attached via Attach menu (Method B)")
+                            photo_inputs[0].send_keys(abs_img_path)
+                            image_attached = True
+                            log_status("📎 Image attached via Photos/Videos input (Method A)")
                         except Exception:
                             pass
                             
-                # Helper to check if media preview modal is open
-                preview_check_xpath = (
-                    "//div[@data-testid='media-caption-input-container'] | "
-                    "//div[@data-testid='image-preview'] | "
-                    "//div[@data-testid='media-editor'] | "
-                    "//div[contains(@class, 'media-panel')] | "
-                    "//div[@contenteditable='true' and (contains(@aria-placeholder, 'caption') or contains(@aria-placeholder, 'Caption') or contains(@aria-label, 'caption') or contains(@aria-label, 'Caption'))] | "
-                    "//span[@data-icon='media-editor-drawing' or @data-icon='crop']"
-                )
-                
-                if image_attached:
-                    time.sleep(1.2)
-                    if len(driver.find_elements(By.XPATH, preview_check_xpath)) == 0:
-                        image_attached = False
-                            
-                # Method C: Clipboard Paste Fallback (if A/B didn't open preview)
-                if not image_attached:
-                    copy_image_to_clipboard(image_path)
-                    time.sleep(0.3)
+                    # Method B: Click Plus/Attach button then send to Photos & Videos file input
+                    if not image_attached:
+                        attach_btns = driver.find_elements(By.XPATH, "//div[@title='Attach'] | //span[@data-icon='plus'] | //span[@data-icon='plus-rounded'] | //span[@data-icon='attach-menu-plus'] | //button[@title='Attach'] | //div[@role='button'][@aria-label='Attach'] | //button[@aria-label='Attach']")
+                        if len(attach_btns) > 0:
+                            try:
+                                driver.execute_script("arguments[0].click();", attach_btns[0])
+                                time.sleep(0.8)
+                                photo_inputs = driver.find_elements(By.XPATH, photo_input_xpath)
+                                if len(photo_inputs) > 0:
+                                    photo_inputs[0].send_keys(abs_img_path)
+                                    image_attached = True
+                                    log_status("📎 Image attached via Attach menu (Method B)")
+                            except Exception:
+                                pass
+                                
+                    # Helper to check if media preview modal is open
+                    preview_check_xpath = (
+                        "//div[@data-testid='media-caption-input-container'] | "
+                        "//div[@data-testid='image-preview'] | "
+                        "//div[@data-testid='media-editor'] | "
+                        "//div[contains(@class, 'media-panel')] | "
+                        "//div[@contenteditable='true' and (contains(@aria-placeholder, 'caption') or contains(@aria-placeholder, 'Caption') or contains(@aria-label, 'caption') or contains(@aria-label, 'Caption'))] | "
+                        "//span[@data-icon='media-editor-drawing' or @data-icon='crop']"
+                    )
                     
-                    # Refetch msg_box freshly to avoid stale element reference
-                    target_box = None
-                    for sel in msg_box_selectors:
-                        try:
-                            found = driver.find_element(By.XPATH, sel)
-                            if found.is_displayed():
-                                target_box = found
-                                break
-                        except Exception:
-                            continue
-                    if not target_box:
-                        target_box = msg_box
+                    if image_attached:
+                        time.sleep(1.2)
+                        if len(driver.find_elements(By.XPATH, preview_check_xpath)) == 0:
+                            image_attached = False
+                                
+                    # Method C: Clipboard Paste Fallback (if A/B didn't open preview)
+                    if not image_attached:
+                        copy_image_to_clipboard(image_path)
+                        time.sleep(0.3)
                         
-                    try:
-                        driver.execute_script("arguments[0].focus();", target_box)
-                        target_box.click()
-                    except Exception:
-                        pass
-                    time.sleep(0.3)
-                    try:
-                        target_box.send_keys(Keys.CONTROL, 'v')
-                    except Exception:
-                        driver.switch_to.active_element.send_keys(Keys.CONTROL, 'v')
-                    log_status("📎 Image attached via Clipboard (Method C)")
-                
-                # 4. Wait for Image Media Preview Modal
-                media_preview_found = False
-                for _ in range(12):
-                    if len(driver.find_elements(By.XPATH, preview_check_xpath)) > 0:
-                        media_preview_found = True
-                        break
-                    time.sleep(0.5)
-                
-                if not media_preview_found:
-                    raise Exception("Image preview modal NEVER appeared. Skipping to avoid text-only send.")
-                
-                # Find the caption input inside the media preview
-                caption_selectors = [
-                    "//div[@contenteditable='true' and (contains(@aria-placeholder, 'caption') or contains(@aria-placeholder, 'Caption') or contains(@aria-label, 'caption') or contains(@aria-label, 'Caption'))]",
-                    "//div[@data-testid='media-caption-input-container']//div[@contenteditable='true']",
-                    "//div[@data-testid='media-caption-input-container']//p",
-                    "//div[contains(@class, 'media-caption')]//div[@contenteditable='true']",
-                    "//div[contains(@aria-label, 'caption') or contains(@aria-label, 'Caption')]"
-                ]
-                caption_box = None
-                for _ in range(6):
-                    for sel in caption_selectors:
+                        target_box = None
+                        for sel in msg_box_selectors:
+                            try:
+                                found = driver.find_element(By.XPATH, sel)
+                                if found.is_displayed():
+                                    target_box = found
+                                    break
+                            except Exception:
+                                continue
+                        if not target_box:
+                            target_box = msg_box
+                            
                         try:
-                            el = driver.find_element(By.XPATH, sel)
-                            if el.is_displayed():
-                                caption_box = el
-                                break
-                        except Exception:
-                            continue
-                    if caption_box:
-                        break
-                    time.sleep(0.5)
-                    
-                if not caption_box:
-                    raise Exception("Caption input not found in image preview.")
-                    
-                try:
-                    driver.execute_script("arguments[0].focus();", caption_box)
-                    caption_box.click()
-                except Exception:
-                    pass
-                time.sleep(0.2)
-                
-                # Paste caption text
-                pyperclip.copy(message_text)
-                caption_box.send_keys(Keys.CONTROL, 'v')
-                time.sleep(0.4)
-                
-                # Send (Enter + Send Button)
-                caption_box.send_keys(Keys.ENTER)
-                time.sleep(0.4)
-                
-                send_btn_selectors = [
-                    "//div[@role='button'][@aria-label='Send']",
-                    "//button[@aria-label='Send']",
-                    "//span[@data-icon='wds-ic-send-filled']",
-                    "//span[@data-icon='send']",
-                    "//span[@data-testid='send']"
-                ]
-                for sel in send_btn_selectors:
-                    send_btns = driver.find_elements(By.XPATH, sel)
-                    if len(send_btns) > 0:
-                        try:
-                            driver.execute_script("arguments[0].click();", send_btns[0])
+                            driver.execute_script("arguments[0].focus();", target_box)
+                            target_box.click()
                         except Exception:
                             pass
-                        break
-                
-                # 5. Wait for upload to finish (preview modal disappears)
-                for _ in range(15):
-                    previews = driver.find_elements(By.XPATH, preview_check_xpath)
-                    if len(previews) == 0:
-                        break
-                    time.sleep(0.5)
+                        time.sleep(0.3)
+                        try:
+                            target_box.send_keys(Keys.CONTROL, 'v')
+                        except Exception:
+                            driver.switch_to.active_element.send_keys(Keys.CONTROL, 'v')
+                        log_status("📎 Image attached via Clipboard (Method C)")
+                    
+                    # 4. Wait for Image Media Preview Modal
+                    media_preview_found = False
+                    for _ in range(12):
+                        if len(driver.find_elements(By.XPATH, preview_check_xpath)) > 0:
+                            media_preview_found = True
+                            break
+                        time.sleep(0.5)
+                    
+                    if not media_preview_found:
+                        raise Exception("Image preview modal NEVER appeared. Skipping to avoid text-only send.")
+                    
+                    # Find the caption input inside the media preview
+                    caption_selectors = [
+                        "//div[@contenteditable='true' and (contains(@aria-placeholder, 'caption') or contains(@aria-placeholder, 'Caption') or contains(@aria-label, 'caption') or contains(@aria-label, 'Caption'))]",
+                        "//div[@data-testid='media-caption-input-container']//div[@contenteditable='true']",
+                        "//div[@data-testid='media-caption-input-container']//p",
+                        "//div[contains(@class, 'media-caption')]//div[@contenteditable='true']",
+                        "//div[contains(@aria-label, 'caption') or contains(@aria-label, 'Caption')]"
+                    ]
+                    caption_box = None
+                    for _ in range(6):
+                        for sel in caption_selectors:
+                            try:
+                                el = driver.find_element(By.XPATH, sel)
+                                if el.is_displayed():
+                                    caption_box = el
+                                    break
+                            except Exception:
+                                continue
+                        if caption_box:
+                            break
+                        time.sleep(0.5)
+                        
+                    if not caption_box:
+                        raise Exception("Caption input not found in image preview.")
+                        
+                    try:
+                        driver.execute_script("arguments[0].focus();", caption_box)
+                        caption_box.click()
+                    except Exception:
+                        pass
+                    time.sleep(0.2)
+                    
+                    # Paste caption text
+                    pyperclip.copy(message_text)
+                    caption_box.send_keys(Keys.CONTROL, 'v')
+                    time.sleep(0.4)
+                    
+                    # Send (Enter + Send Button)
+                    caption_box.send_keys(Keys.ENTER)
+                    time.sleep(0.4)
+                    
+                    send_btn_selectors = [
+                        "//div[@role='button'][@aria-label='Send']",
+                        "//button[@aria-label='Send']",
+                        "//span[@data-icon='wds-ic-send-filled']",
+                        "//span[@data-icon='send']",
+                        "//span[@data-testid='send']"
+                    ]
+                    for sel in send_btn_selectors:
+                        send_btns = driver.find_elements(By.XPATH, sel)
+                        if len(send_btns) > 0:
+                            try:
+                                driver.execute_script("arguments[0].click();", send_btns[0])
+                            except Exception:
+                                pass
+                            break
+                    
+                    # Wait for upload to finish (preview modal disappears)
+                    for _ in range(15):
+                        previews = driver.find_elements(By.XPATH, preview_check_xpath)
+                        if len(previews) == 0:
+                            break
+                        time.sleep(0.5)
+                else:
+                    # --- Text-Only Flow ---
+                    try:
+                        driver.execute_script("arguments[0].focus();", msg_box)
+                        msg_box.click()
+                    except Exception:
+                        pass
+                    time.sleep(0.2)
+                    
+                    # Paste text into message box
+                    pyperclip.copy(message_text)
+                    msg_box.send_keys(Keys.CONTROL, 'v')
+                    time.sleep(0.4)
+                    
+                    # Press Enter to send text
+                    msg_box.send_keys(Keys.ENTER)
+                    time.sleep(0.4)
+                    
+                    # Also click send button if still visible
+                    send_btn_selectors = [
+                        "//div[@role='button'][@aria-label='Send']",
+                        "//button[@aria-label='Send']",
+                        "//span[@data-icon='wds-ic-send-filled']",
+                        "//span[@data-icon='send']",
+                        "//span[@data-testid='send']"
+                    ]
+                    for sel in send_btn_selectors:
+                        send_btns = driver.find_elements(By.XPATH, sel)
+                        if len(send_btns) > 0:
+                            try:
+                                driver.execute_script("arguments[0].click();", send_btns[0])
+                            except Exception:
+                                pass
+                            break
                     
                 time.sleep(1)
                 log_status(f"✅ Sent to {group_name}!")
@@ -507,18 +542,16 @@ def start_broadcast():
     if is_running:
         return jsonify({"status": "error", "message": "Broadcast is already running."}), 400
         
-    message_text = request.form.get('message', '')
+    message_text = request.form.get('message', '').strip()
+    if not message_text:
+        return jsonify({"status": "error", "message": "Please enter a message."}), 400
     
-    # Handle image upload
-    if 'image' not in request.files:
-        return jsonify({"status": "error", "message": "No image file uploaded."}), 400
-        
-    image_file = request.files['image']
-    if image_file.filename == '':
-        return jsonify({"status": "error", "message": "Empty file name."}), 400
-        
-    image_path = os.path.join(app.config['UPLOAD_FOLDER'], 'broadcast_image.png')
-    image_file.save(image_path)
+    # Handle optional image upload
+    image_path = None
+    if 'image' in request.files and request.files['image'].filename != '':
+        image_file = request.files['image']
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], 'broadcast_image.png')
+        image_file.save(image_path)
     
     # Get list of selected groups
     groups = load_groups()

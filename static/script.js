@@ -287,10 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Please enter a broadcast message.');
             return;
         }
-        if (!selectedImageFile) {
-            alert('Please select or drop an image file.');
-            return;
-        }
         
         const activeGroups = groupsData.filter(g => g.selected);
         if (activeGroups.length === 0) {
@@ -301,7 +297,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Build FormData
         const formData = new FormData();
         formData.append('message', text);
-        formData.append('image', selectedImageFile);
+        if (selectedImageFile) {
+            formData.append('image', selectedImageFile);
+        }
 
         setUIStateRunning();
         log('Starting broadcast process...', 'system');
