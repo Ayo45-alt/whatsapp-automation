@@ -270,54 +270,32 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     driver.execute_script("arguments[0].click();", search_box)
                 time.sleep(0.2)
                 
-                # Select all and delete to clear existing text
+                # Clear existing text
                 search_box.send_keys(Keys.ESCAPE)
                 time.sleep(0.1)
                 search_box.send_keys(Keys.CONTROL + "a")
                 search_box.send_keys(Keys.BACKSPACE)
                 time.sleep(0.3)
                 
-                # Query to search: use full name or distinctive first 35 chars
-                search_query = group_name
-                if len(group_name) > 40 and "..." in group_name:
-                    search_query = group_name.split("...")[0].strip()
-                
-                # Paste search query via clipboard for accurate typing
-                pyperclip.copy(search_query)
+                # Paste group name via clipboard for accurate typing
+                pyperclip.copy(group_name)
                 search_box.send_keys(Keys.CONTROL + "v")
                 
-                # 2. Wait for search results
+                # 2. Wait for WhatsApp to search and show results
+                time.sleep(1.5)
+                
+                # Send ENTER to open the matched chat
+                search_box.send_keys(Keys.ENTER)
                 time.sleep(1.2)
                 
-                # Check if WhatsApp explicitly says no chats found
-                no_results = driver.find_elements(By.XPATH, "//div[@id='pane-side']//*[contains(text(), 'No chats') or contains(text(), 'No contacts')]")
-                if len(no_results) > 0 and any(nr.is_displayed() for nr in no_results):
-                    log_status(f"⚠️ '{group_name}' not found in WhatsApp chats. Skipping.")
-                    try:
-                        search_box.send_keys(Keys.ESCAPE)
-                        search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
-                    except Exception:
-                        pass
-                    continue
-                
-                # Look for a chat item in search results whose title matches the group
-                clicked_target = False
+                # If chat didn't open with Enter, try clicking the matched row in the sidebar
                 try:
-                    title_spans = driver.find_elements(By.XPATH, "//div[@id='pane-side']//span[@title]")
-                    for span in title_spans:
-                        span_title = span.get_attribute("title") or span.text
-                        if is_name_match(group_name, span_title):
-                            driver.execute_script("arguments[0].click();", span)
-                            clicked_target = True
-                            break
+                    matched_items = driver.find_elements(By.XPATH, "//div[@id='pane-side']//div[@tabindex='-1']")
+                    if len(matched_items) > 0:
+                        driver.execute_script("arguments[0].click();", matched_items[0])
+                        time.sleep(0.8)
                 except Exception:
                     pass
-                
-                # If not clicked directly, press ENTER in search box to select top match
-                if not clicked_target:
-                    search_box.send_keys(Keys.ENTER)
-                    
-                time.sleep(0.8)
 
                 # 3. Locate message input compose box to confirm chat is open
                 msg_box_selectors = [
