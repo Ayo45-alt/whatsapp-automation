@@ -84,10 +84,15 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.binary_location = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
         options.page_load_strategy = "eager"
+        local_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
         try:
+            if os.path.exists(local_driver_path):
+                service = Service(executable_path=local_driver_path)
+                driver = webdriver.Chrome(service=service, options=options)
+            else:
+                driver = webdriver.Chrome(options=options)
+        except Exception:
             driver = webdriver.Chrome(options=options)
-        except Exception as e:
-            raise RuntimeError(f"Could not start Chrome or resolve its matching driver: {e}") from e
             
         try:
             driver.maximize_window()
