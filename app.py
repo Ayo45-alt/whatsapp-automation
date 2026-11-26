@@ -1,12 +1,11 @@
 from flask import Flask, render_template, request, jsonify, Response
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException
 from PIL import Image
 import win32clipboard
 import pyperclip
@@ -74,19 +73,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
     
     driver = None
     try:
-        log_status("🚀 Launching Chrome browser...")
-        # Clean up any leftover chromedriver or stuck automation chrome processes locking the profile
-        try:
-            import subprocess
-            subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(
-                ["powershell", "-Command", "Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe' AND CommandLine LIKE '%whatsapp_profile_copy%'\" | Invoke-CimMethod -MethodName Terminate"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            time.sleep(0.5)
-        except Exception:
-            pass
-
+        log_status("🚀 Launching Chrome browser and resolving a matching ChromeDriver...")
         options = Options()
         options.add_argument(r"user-data-dir=C:\Users\USER\Desktop\whatsapp_profile_copy")
         options.add_argument("profile-directory=Profile 11")
@@ -96,18 +83,11 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.binary_location = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-        local_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
-        if not os.path.exists(local_driver_path):
-            local_driver_path = os.path.join(os.getcwd(), "chromedriver-win64", "chromedriver.exe")
-
+        options.page_load_strategy = "eager"
         try:
-            if os.path.exists(local_driver_path):
-                service = Service(executable_path=local_driver_path)
-                driver = webdriver.Chrome(service=service, options=options)
-            else:
-                driver = webdriver.Chrome(options=options)
-        except Exception:
             driver = webdriver.Chrome(options=options)
+        except Exception as e:
+            raise RuntimeError(f"Could not start Chrome or resolve its matching driver: {e}") from e
             
         try:
             driver.maximize_window()
@@ -128,7 +108,11 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
         except Exception:
             pass
 
-        driver.get("https://web.whatsapp.com")
+        driver.set_page_load_timeout(60)
+        try:
+            driver.get("https://web.whatsapp.com")
+        except TimeoutException:
+            log_status("⚠️ WhatsApp Web is taking longer than 60 seconds to load; continuing to check its status...")
         
         log_status("⏳ Waiting for WhatsApp Web to load...")
         
@@ -242,6 +226,22 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     continue
             return None
 
+        # Helper to match chat titles accurately
+        def is_name_match(target, actual):
+            if not target or not actual:
+                return False
+            t = ''.join(c for c in target.lower() if c.isalnum())
+            a = ''.join(c for c in actual.lower() if c.isalnum())
+            if not t or not a:
+                return False
+            if t in a or a in t:
+                return True
+            if len(t) >= 12 and t[:12] in a:
+                return True
+            if len(a) >= 12 and a[:12] in t:
+                return True
+            return False
+
         # Loop through target groups
         for idx, group_name in enumerate(groups_to_send):
             try:
@@ -266,32 +266,73 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 time.sleep(0.2)
                 
                 # Select all and delete to clear existing text
+                search_box.send_keys(Keys.ESCAPE)
+                time.sleep(0.1)
                 search_box.send_keys(Keys.CONTROL + "a")
                 search_box.send_keys(Keys.BACKSPACE)
                 time.sleep(0.3)
                 
-                # Paste group name via clipboard for accurate typing
-                pyperclip.copy(group_name)
+                # Query to search: use full name or distinctive first 35 chars
+                search_query = group_name
+                if len(group_name) > 40 and "..." in group_name:
+                    search_query = group_name.split("...")[0].strip()
+                
+                # Paste search query via clipboard for accurate typing
+                pyperclip.copy(search_query)
                 search_box.send_keys(Keys.CONTROL + "v")
                 
-                # 2. Wait for search results and select the chat
+                # 2. Wait for search results
                 time.sleep(1.5)
                 
-                # Send ENTER to select top match from search
-                search_box.send_keys(Keys.ENTER)
-                time.sleep(0.5)
-                
-                # Also try direct click on any matching chat item in the sidebar
+                # Look for a chat item in search results whose title matches the group
+                clicked_target = False
                 try:
-                    chat_items = driver.find_elements(By.XPATH, "//div[@id='pane-side']//div[@tabindex='-1'] | //div[@id='pane-side']//span[@title]")
-                    if len(chat_items) > 0:
-                        driver.execute_script("arguments[0].click();", chat_items[0])
+                    title_spans = driver.find_elements(By.XPATH, "//div[@id='pane-side']//span[@title]")
+                    for span in title_spans:
+                        span_title = span.get_attribute("title") or span.text
+                        if is_name_match(group_name, span_title):
+                            driver.execute_script("arguments[0].click();", span)
+                            clicked_target = True
+                            break
                 except Exception:
                     pass
-                    
-                time.sleep(0.5)
                 
-                # 3. Locate message input compose box to confirm chat is open
+                # Fallback: if not clicked directly from spans, press ENTER in search box
+                if not clicked_target:
+                    search_box.send_keys(Keys.ENTER)
+                    
+                time.sleep(1.0)
+                
+                # 3. VERIFY CHAT HEADER to ensure the opened chat is actually the target group!
+                current_header_title = None
+                for _ in range(8):
+                    header_els = driver.find_elements(
+                        By.XPATH,
+                        "//div[@id='main']//header//span[@title] | //header//div[@role='button']//span[@title] | //header//span[@title]"
+                    )
+                    for el in header_els:
+                        try:
+                            t = el.get_attribute("title") or el.text
+                            if t and len(t.strip()) > 0 and t.strip().lower() not in ["search", "menu", "status"]:
+                                current_header_title = t.strip()
+                                break
+                        except Exception:
+                            continue
+                    if current_header_title and is_name_match(group_name, current_header_title):
+                        break
+                    time.sleep(0.5)
+                
+                # Strict check: If open chat does NOT match target group, REFUSE to send!
+                if not current_header_title or not is_name_match(group_name, current_header_title):
+                    log_status(f"⚠️ Open chat ('{current_header_title}') does not match target '{group_name}'. Skipping to prevent sending to wrong person!")
+                    try:
+                        search_box.send_keys(Keys.ESCAPE)
+                        search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
+                    except Exception:
+                        pass
+                    continue
+
+                # 4. Locate message input compose box to confirm chat is open
                 msg_box_selectors = [
                     "//div[@data-testid='conversation-compose-box-input']",
                     "//footer//div[@contenteditable='true']",
@@ -313,8 +354,9 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     time.sleep(0.5)
                     
                 if not msg_box:
-                    log_status(f"⚠️ Could not open chat for: {group_name} (Chat not found or failed to load)")
+                    log_status(f"⚠️ Message box not found for: {group_name}. Skipping.")
                     try:
+                        search_box.send_keys(Keys.ESCAPE)
                         search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
                     except Exception:
                         pass
