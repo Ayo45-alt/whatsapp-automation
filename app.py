@@ -287,7 +287,18 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 search_box.send_keys(Keys.CONTROL + "v")
                 
                 # 2. Wait for search results
-                time.sleep(1.5)
+                time.sleep(1.2)
+                
+                # Check if WhatsApp explicitly says no chats found
+                no_results = driver.find_elements(By.XPATH, "//div[@id='pane-side']//*[contains(text(), 'No chats') or contains(text(), 'No contacts')]")
+                if len(no_results) > 0 and any(nr.is_displayed() for nr in no_results):
+                    log_status(f"⚠️ '{group_name}' not found in WhatsApp chats. Skipping.")
+                    try:
+                        search_box.send_keys(Keys.ESCAPE)
+                        search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
+                    except Exception:
+                        pass
+                    continue
                 
                 # Look for a chat item in search results whose title matches the group
                 clicked_target = False
@@ -302,42 +313,13 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                 except Exception:
                     pass
                 
-                # Fallback: if not clicked directly from spans, press ENTER in search box
+                # If not clicked directly, press ENTER in search box to select top match
                 if not clicked_target:
                     search_box.send_keys(Keys.ENTER)
                     
-                time.sleep(1.0)
-                
-                # 3. VERIFY CHAT HEADER to ensure the opened chat is actually the target group!
-                current_header_title = None
-                for _ in range(8):
-                    header_els = driver.find_elements(
-                        By.XPATH,
-                        "//div[@id='main']//header//span[@title] | //header//div[@role='button']//span[@title] | //header//span[@title]"
-                    )
-                    for el in header_els:
-                        try:
-                            t = el.get_attribute("title") or el.text
-                            if t and len(t.strip()) > 0 and t.strip().lower() not in ["search", "menu", "status"]:
-                                current_header_title = t.strip()
-                                break
-                        except Exception:
-                            continue
-                    if current_header_title and is_name_match(group_name, current_header_title):
-                        break
-                    time.sleep(0.5)
-                
-                # Strict check: If open chat does NOT match target group, REFUSE to send!
-                if not current_header_title or not is_name_match(group_name, current_header_title):
-                    log_status(f"⚠️ Open chat ('{current_header_title}') does not match target '{group_name}'. Skipping to prevent sending to wrong person!")
-                    try:
-                        search_box.send_keys(Keys.ESCAPE)
-                        search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
-                    except Exception:
-                        pass
-                    continue
+                time.sleep(0.8)
 
-                # 4. Locate message input compose box to confirm chat is open
+                # 3. Locate message input compose box to confirm chat is open
                 msg_box_selectors = [
                     "//div[@data-testid='conversation-compose-box-input']",
                     "//footer//div[@contenteditable='true']",
@@ -345,7 +327,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     "//footer//p"
                 ]
                 msg_box = None
-                for _ in range(5):
+                for _ in range(6):
                     for sel in msg_box_selectors:
                         try:
                             el = driver.find_element(By.XPATH, sel)
@@ -359,7 +341,7 @@ def run_selenium_broadcast(groups_to_send, message_text, image_path):
                     time.sleep(0.5)
                     
                 if not msg_box:
-                    log_status(f"⚠️ Message box not found for: {group_name}. Skipping.")
+                    log_status(f"⚠️ Could not open compose box for: {group_name}. Skipping.")
                     try:
                         search_box.send_keys(Keys.ESCAPE)
                         search_box.send_keys(Keys.CONTROL + "a", Keys.BACKSPACE)
